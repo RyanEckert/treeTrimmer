@@ -40,6 +40,8 @@
 #'     \item{\code{group_sizes}}{Named integer vector of sample counts per group.}
 #'     \item{\code{groups}}{List of character vectors showing which samples were
 #'           assigned to each group (useful for verification).}
+#'     \item{\code{tree}}{The original \code{hclust} object, stored for use with
+#'           \code{\link{prune_clones}}.}
 #'   }
 #'
 #' @details
@@ -319,7 +321,8 @@ tree_trimmer <- function(tree_obj, rep_groups,
       buffer = buffer,
       group_heights = group_heights,
       group_sizes = group_sizes,
-      groups = processed_groups
+      groups = processed_groups,
+      tree = tree_obj
     ))
   }
 
@@ -348,7 +351,8 @@ tree_trimmer <- function(tree_obj, rep_groups,
       buffer = buffer,
       group_heights = group_heights,
       group_sizes = group_sizes,
-      groups = processed_groups
+      groups = processed_groups,
+      tree = tree_obj
     ),
     class = c("tree_trimmer", "list")
   )
