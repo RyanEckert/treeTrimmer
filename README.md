@@ -187,4 +187,4 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ## Authors
 
-- RJ Eckert (Harbor Branch Oceanographic Institution, Florida Atlantic University)
+- R. J. Eckert (Florida Atlantic University)

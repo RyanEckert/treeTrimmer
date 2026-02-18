@@ -108,7 +108,6 @@
 #' other groups.
 #'
 #' @examples
-#' \dontrun{
 #' # Simulate genetic distance data
 #' set.seed(123)
 #' dist_mat <- dist(matrix(rnorm(100), nrow = 20))
@@ -116,32 +115,24 @@
 #'
 #' # Example 1: Explicit list method
 #' tech_reps <- list(
-#'   OGM024 = c("OGM024.1", "OGM024.2", "OGM024.3"),
-#'   OGM066 = c("OGM066.1", "OGM066.2", "OGM066.3")
+#'   group1 = c("1", "2", "3"),
+#'   group2 = c("4", "5", "6")
 #' )
 #' result <- tree_trimmer(hc, tech_reps)
+#' print(result)
 #'
 #' # Use the calibrated height for clone detection
 #' clone_groups <- cutree(hc, h = result$height)
+#' table(clone_groups)
 #'
-#' # Example 2: Prefix auto-detection
-#' prefixes <- c("OGM024", "OGM066", "OGM108")
-#' result <- tree_trimmer(hc, prefixes,
-#'                        method = "prefix",
-#'                        separator = ".")
+#' # Example 2: Custom buffer
+#' result2 <- tree_trimmer(hc, tech_reps, buffer = 1.05, verbose = FALSE)
+#' result2$height
 #'
-#' # Example 3: Custom buffer with quiet output
-#' result <- tree_trimmer(hc, tech_reps,
-#'                        buffer = 1.05,
-#'                        verbose = FALSE)
+#' # Example 3: Access individual components
+#' result$group_heights
+#' result$group_sizes
 #'
-#' # Example 4: Access individual components
-#' plot(hc)
-#' abline(h = result$height, col = "red", lty = 2)
-#' text(x = par("usr")[2] * 0.9, y = result$height,
-#'      labels = paste("Cut height =", round(result$height, 4)),
-#'      pos = 3, col = "red")
-#' }
 #'
 #' @seealso
 #' \code{\link[stats]{hclust}} for hierarchical clustering,
