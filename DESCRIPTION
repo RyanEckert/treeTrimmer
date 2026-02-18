@@ -2,26 +2,26 @@ Package: treeTrimmer
 Type: Package
 Title: Calibrate Hierarchical Clustering Thresholds Using Technical Replicates
 Version: 1.0.0
-Authors@R: person("R. J.", "Eckert", email = "ryan.j.eckert@gmail.com", role = c("aut", "cre"))
-Description: Provides tools to calibrate tree cut heights for clone detection in
-    hierarchical clustering analyses. Uses known technical replicates to determine
-    the minimum genetic distance threshold at which true clones cluster together.
-    Particularly useful for population genetic studies with clonal organisms (corals,
-    plants, fungi) where identifying and removing clonal replicates is critical for
+Authors@R: person("Ryan J.", "Eckert", email = "ryan.j.eckert@gmail.com", role = c("aut", "cre"))
+Description: Provides tools to calibrate tree cut heights for clone detection in 
+    hierarchical clustering analyses. Uses known technical replicates to determine 
+    the minimum genetic distance threshold at which true clones cluster together. 
+    Particularly useful for population genetic studies with clonal organisms (corals, 
+    plants, fungi) where identifying and removing clonal replicates is critical for 
     accurate demographic and evolutionary inference.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.2.3
-Depends:
+Depends: 
     R (>= 3.5.0)
 Imports:
-    stats
+    stats,
+    dplyr
 Suggests:
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0),
-    dplyr
+    testthat (>= 3.0.0)
 VignetteBuilder: knitr
 URL: https://github.com/ryanEckert/treeTrimmer
 BugReports: https://github.com/ryanEckert/treeTrimmer/issues
