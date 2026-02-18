@@ -19,7 +19,6 @@
 #'   \item Remove clones by selecting one representative per cluster
 #' }
 #'
-#' @docType package
-#' @name treeTrimmer-package
-#' @aliases treeTrimmer
-NULL
+#' @keywords internal
+"_PACKAGE"
+

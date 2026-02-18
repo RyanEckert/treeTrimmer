@@ -28,6 +28,7 @@
 #'
 #' @source Simulated data based on empirical coral population genetics studies
 #'
+#' @name coral_ibs
 #' @examples
 #' # Load data from CSV (included in package)
 #' data_file <- system.file("extdata", "coral_ibs.csv", package = "treeTrimmer")
@@ -46,7 +47,7 @@
 #' )
 #' result <- tree_trimmer(hc, tech_reps)
 #' result$height
-"coral_ibs"
+NULL
 
 #' Example Coral Sample Metadata
 #'
@@ -65,6 +66,7 @@
 #'
 #' @source Simulated data
 #'
+#' @name coral_metadata
 #' @examples
 #' # Load metadata from CSV
 #' data_file <- system.file("extdata", "coral_metadata.csv", package = "treeTrimmer")
@@ -76,7 +78,7 @@
 #'
 #' # After clone detection, select best quality rep per cluster
 #' # (see vignette for full workflow)
-"coral_metadata"
+NULL
 
 #' Technical Replicate Groups
 #'
@@ -93,6 +95,7 @@
 #'
 #' @source Simulated data
 #'
+#' @name tech_rep_groups
 #' @examples
 #' # Tech rep groups are provided as package data
 #' tech_rep_groups <- list(
@@ -108,4 +111,4 @@
 #' hc <- hclust(dist_mat, method = "average")
 #'
 #' result <- tree_trimmer(hc, tech_rep_groups)
-"tech_rep_groups"
+NULL
