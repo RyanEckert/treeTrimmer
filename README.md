@@ -60,13 +60,13 @@ If your samples follow a consistent naming pattern:
 # Instead of manually listing all replicates...
 prefixes <- c("OGM024", "OGM066", "OGM108")
 
-result <- tree_trimmer(hc, prefixes,
-                       method = "prefix",
+result <- tree_trimmer(hc, prefixes, 
+                       method = "prefix", 
                        separator = ".")
 
 # This auto-detects:
 # - OGM024.1, OGM024.2, OGM024.3
-# - OGM066.1, OGM066.2, OGM066.3
+# - OGM066.1, OGM066.2, OGM066.3  
 # - OGM108.1, OGM108.2, OGM108.3
 ```
 
@@ -95,7 +95,7 @@ Final cut height: 0.017246
 ```r
 # 1. Calculate genetic distances (e.g., from IBS matrix)
 ibs_matrix <- read.table("samples.ibsMat")
-dist_matrix <- as.dist(1 - ibs_matrix)
+dist_matrix <- as.dist(ibs_matrix)
 
 # 2. Build tree
 hc <- hclust(dist_matrix, method = "average")
@@ -137,7 +137,7 @@ angsd -b samples.bams -GL 1 \
 # Detect and remove clones in R
 library(treeTrimmer)
 ibs_mat <- as.matrix(read.table("myproject.ibsMat"))
-dist_mat <- as.dist(1 - ibs_mat)
+dist_mat <- as.dist(ibs_mat)
 hc <- hclust(dist_mat, method = "average")
 
 result <- tree_trimmer(hc, tech_reps)
@@ -165,7 +165,7 @@ angsd -b samples_noclones.bams -GL 1 \
 If you use `treeTrimmer` in your research, please cite:
 
 ```
-Eckert, R. (2025). treeTrimmer: Calibrate Hierarchical Clustering
+Eckert, R.J. (2025). treeTrimmer: Calibrate Hierarchical Clustering 
 Thresholds Using Technical Replicates. R package version 1.0.0.
 https://github.com/ryanEckert/treeTrimmer
 ```
@@ -187,4 +187,4 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ## Authors
 
-- R. J. Eckert (Florida Atlantic University)
+- Ryan J. Eckert (Florida Atlantic University)
