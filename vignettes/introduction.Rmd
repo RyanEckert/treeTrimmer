@@ -1,0 +1,324 @@
+---
+title: "Getting Started with treeTrimmer"
+author: "R. Eckert"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with treeTrimmer}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+The `treeTrimmer` package provides a principled way to calibrate hierarchical clustering thresholds for clone detection in population genetic studies. This is particularly important for clonal organisms (corals, plants, asexual fungi) where individuals may be genetic clones of each other.
+
+## The Problem
+
+When analyzing genetic data from clonal organisms, you need to:
+
+1. **Identify clones** - individuals that are genetically identical (or nearly so)
+2. **Remove clones** - keep only one representative per clonal group to avoid pseudoreplication
+
+Hierarchical clustering based on genetic distance (e.g., 1 - IBS) can identify clones, but choosing the right tree cut height is challenging. Cut too low and you miss true clones. Cut too high and you incorrectly merge distinct genotypes.
+
+## The Solution
+
+If you have **technical replicates** - samples that are known a priori to be clones (e.g., DNA extracted and sequenced multiple times from the same individual) - you can use them to empirically calibrate the threshold.
+
+`tree_trimmer()` finds the minimum tree height at which all your technical replicates cluster together, then adds a safety buffer.
+
+## Basic Usage
+
+```{r basic-example}
+library(treeTrimmer)
+
+# Load example coral IBS data (included with package)
+data_file <- system.file("extdata", "coral_ibs.csv", package = "treeTrimmer")
+coral_ibs <- read.csv(data_file, row.names = 1)
+coral_ibs <- as.matrix(coral_ibs)
+
+# Convert IBS to distance and build tree
+dist_matrix <- as.dist(1 - coral_ibs)
+hc <- hclust(dist_matrix, method = "average")
+
+# Define your technical replicates
+tech_reps <- list(
+  OGM024 = c("OGM024.1", "OGM024.2", "OGM024.3"),
+  OGM066 = c("OGM066.1", "OGM066.2", "OGM066.3"),
+  OGM108 = c("OGM108.1", "OGM108.2", "OGM108.3")
+)
+
+# Calibrate the cut height
+result <- tree_trimmer(hc, tech_reps)
+
+# Use the calibrated height for clone detection
+clone_groups <- cutree(hc, h = result$height)
+
+# Show result
+print(result)
+```
+
+## Complete Workflow Example
+
+Here's a full example from genetic distance matrix to clone-free dataset using the included example data:
+
+```{r complete-workflow}
+library(treeTrimmer)
+library(dplyr)
+
+# Step 1: Load example IBS matrix
+data_file <- system.file("extdata", "coral_ibs.csv", package = "treeTrimmer")
+ibs_matrix <- read.csv(data_file, row.names = 1)
+ibs_matrix <- as.matrix(ibs_matrix)
+
+# Step 2: Convert to distance matrix (1 - IBS)
+dist_matrix <- as.dist(1 - ibs_matrix)
+
+# Step 3: Build hierarchical clustering tree
+hc <- hclust(dist_matrix, method = "average")
+
+# Step 4: Define technical replicates
+tech_reps <- list(
+  OGM024 = c("OGM024.1", "OGM024.2", "OGM024.3"),
+  OGM066 = c("OGM066.1", "OGM066.2", "OGM066.3"),
+  OGM108 = c("OGM108.1", "OGM108.2", "OGM108.3")
+)
+
+# Step 5: Calibrate threshold (verbose output shown)
+result <- tree_trimmer(hc, tech_reps, buffer = 1.1)
+
+# Step 6: Cut the tree at the calibrated height
+clone_groups <- cutree(hc, h = result$height)
+
+# Step 7: Load metadata and remove clones (keep best-quality sample per group)
+meta_file <- system.file("extdata", "coral_metadata.csv", package = "treeTrimmer")
+sample_metadata <- read.csv(meta_file)
+sample_metadata$cluster <- clone_groups[sample_metadata$sample]
+
+unique_genets <- sample_metadata %>%
+  group_by(cluster) %>%
+  arrange(desc(quality_score)) %>%
+  slice(1) %>%
+  ungroup()
+
+cat("Started with", nrow(sample_metadata), "samples\n")
+cat("Detected", length(unique(clone_groups)), "clonal groups\n")
+cat("Final dataset:", nrow(unique_genets), "unique genets\n")
+```
+
+## Using the Prefix Method
+
+If your samples follow a consistent naming convention, the prefix method is cleaner:
+
+```{r prefix-method, eval=FALSE}
+# Instead of manually listing all replicates...
+# Just provide the prefixes
+prefixes <- c("OGM024", "OGM066", "OGM108")
+
+result <- tree_trimmer(hc, prefixes, 
+                       method = "prefix", 
+                       separator = ".")
+
+# This automatically finds:
+# - OGM024.1, OGM024.2, OGM024.3
+# - OGM066.1, OGM066.2, OGM066.3
+# - OGM108.1, OGM108.2, OGM108.3
+```
+
+The `separator` argument is required to avoid false matches. For example, with `separator = "."`, the prefix `"OGM11"` will only match samples like `OGM11.1`, `OGM11.2`, etc., and will NOT match `OGM111` or `OGM112`.
+
+## Understanding the Buffer
+
+The `buffer` parameter adds a safety margin above the empirical threshold:
+
+```{r buffer-examples, eval=FALSE}
+# No buffer (risky - any technical variation breaks it)
+result <- tree_trimmer(hc, tech_reps, buffer = 1.0)
+
+# Conservative 5% margin
+result <- tree_trimmer(hc, tech_reps, buffer = 1.05)
+
+# Default 10% margin (recommended)
+result <- tree_trimmer(hc, tech_reps, buffer = 1.1)
+
+# Liberal 20% margin (may merge non-clones)
+result <- tree_trimmer(hc, tech_reps, buffer = 1.2)
+```
+
+**Recommendation:** Start with the default `buffer = 1.1`. If you see many small clusters in your final dataset that look like they should be merged (based on domain knowledge), increase it slightly. If you see very large clusters with high within-cluster diversity, decrease it.
+
+## Visualizing Results
+
+```{r visualization, eval=FALSE}
+# Plot the dendrogram with the cut line
+plot(hc, labels = FALSE, main = "Clone Detection")
+abline(h = result$height, col = "red", lty = 2, lwd = 2)
+text(x = par("usr")[2] * 0.95, 
+     y = result$height,
+     labels = paste("Cut height =", round(result$height, 4)),
+     pos = 3, col = "red", cex = 0.8)
+
+# Add technical replicate markers
+tech_rep_names <- unlist(tech_reps)
+tech_rep_indices <- which(hc$labels %in% tech_rep_names)
+points(tech_rep_indices, 
+       rep(0, length(tech_rep_indices)),
+       pch = 19, col = "blue", cex = 1.5)
+legend("topright", 
+       legend = c("Cut threshold", "Technical replicates"),
+       col = c("red", "blue"),
+       lty = c(2, NA),
+       pch = c(NA, 19))
+```
+
+## Accessing Result Components
+
+The `tree_trimmer()` function returns a list with useful components:
+
+```{r result-components, eval=FALSE}
+result <- tree_trimmer(hc, tech_reps)
+
+# The cut height (most commonly used)
+result$height
+
+# Height before applying buffer
+result$max_raw_height
+
+# Buffer used
+result$buffer
+
+# Per-group heights (for diagnostics)
+result$group_heights
+
+# Sample counts per group
+result$group_sizes
+
+# The actual samples in each group (for verification)
+result$groups
+```
+
+## Common Issues and Solutions
+
+### Issue: "Prefix matched zero samples"
+
+**Problem:** Your prefix doesn't match any samples in the tree.
+
+**Solution:** Check your tree labels and make sure the prefix exactly matches the beginning of your sample names:
+
+```{r check-labels, eval=FALSE}
+# See what's actually in your tree
+head(hc$labels, 20)
+
+# Test a pattern manually
+grep("^OGM024\\.", hc$labels, value = TRUE)
+```
+
+### Issue: "Group never unified"
+
+**Problem:** Your technical replicates are so divergent they never cluster together.
+
+**Solution:** This usually indicates a data quality problem:
+
+1. Check for sample swaps or mislabeling
+2. Verify these really are technical replicates
+3. Look for contamination or poor sequencing quality
+
+```{r diagnose-divergence, eval=FALSE}
+# Check the IBS values between "replicates"
+tech_rep_names <- c("OGM024.1", "OGM024.2", "OGM024.3")
+ibs_matrix[tech_rep_names, tech_rep_names]
+
+# Should be very high (>0.95 for true clones)
+```
+
+### Issue: Too many/too few clonal groups
+
+**Problem:** Your final dataset has an unexpected number of unique genets.
+
+**Solution:** Adjust the buffer:
+
+```{r adjust-buffer, eval=FALSE}
+# If too many groups (under-clustering), increase buffer
+result <- tree_trimmer(hc, tech_reps, buffer = 1.15)
+
+# If too few groups (over-clustering), decrease buffer
+result <- tree_trimmer(hc, tech_reps, buffer = 1.05)
+
+# Always validate by inspecting within-cluster diversity
+```
+
+## Integration with ANGSD Workflows
+
+This package was designed for use with ANGSD (Analysis of Next Generation Sequencing Data) workflows. Here's how it fits in:
+
+```{bash angsd-workflow, eval=FALSE}
+# 1. Generate IBS matrix with ANGSD
+angsd -b samples.bams -GL 1 \
+      -doIBS 1 -doCounts 1 -doMajorMinor 1 -makeMatrix 1 \
+      -minInd 100 -minMapQ 20 -minQ 30 \
+      -out myproject
+
+# This creates: myproject.ibsMat
+```
+
+```{r angsd-in-r, eval=FALSE}
+# 2. Load in R and detect clones
+library(treeTrimmer)
+
+ibs_mat <- as.matrix(read.table("myproject.ibsMat"))
+dist_mat <- as.dist(1 - ibs_mat)
+hc <- hclust(dist_mat, method = "average")
+
+prefixes <- c("Sample001", "Sample042", "Sample089")
+result <- tree_trimmer(hc, prefixes, method = "prefix", separator = ".")
+
+clone_groups <- cutree(hc, h = result$height)
+
+# 3. Write clone-free BAM list
+metadata <- data.frame(
+  sample = rownames(ibs_mat),
+  bam = paste0(rownames(ibs_mat), ".bam"),
+  cluster = clone_groups,
+  quality = # your quality metric
+)
+
+unique_genets <- metadata %>%
+  group_by(cluster) %>%
+  arrange(desc(quality)) %>%
+  slice(1)
+
+writeLines(unique_genets$bam, "samples_no_clones.bams")
+```
+
+```{bash downstream-angsd, eval=FALSE}
+# 4. Run downstream ANGSD analyses with clone-free dataset
+angsd -b samples_no_clones.bams -GL 1 \
+      -doMaf 1 -doGlf 2 -doMajorMinor 1 \
+      # ... rest of your analysis
+```
+
+## Citation
+
+If you use `treeTrimmer` in your research, please cite:
+
+```
+Eckert, R. (2025). treeTrimmer: Calibrate Hierarchical Clustering 
+Thresholds Using Technical Replicates. R package version 1.0.0.
+https://github.com/YOUR_USERNAME/treeTrimmer
+```
+
+## Further Reading
+
+- [ANGSD documentation](http://www.popgen.dk/angsd/index.php/ANGSD)
+- [Clone detection in population genetics](https://doi.org/10.1111/j.1365-294X.2011.05239.x)
+- Hierarchical clustering: Müllner, D. (2013). fastcluster: Fast Hierarchical, Agglomerative Clustering Routines for R and Python. *Journal of Statistical Software*, 53(9), 1-18.

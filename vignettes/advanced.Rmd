@@ -1,0 +1,378 @@
+---
+title: "Advanced Usage and Troubleshooting"
+author: "R. Eckert"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Advanced Usage and Troubleshooting}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Advanced Techniques
+
+### Validating Clone Detection Results
+
+After running `tree_trimmer()` and cutting your tree, you should validate the results:
+
+```{r validation, eval=FALSE}
+library(treeTrimmer)
+
+# Run clone detection
+result <- tree_trimmer(hc, tech_reps)
+clone_groups <- cutree(hc, h = result$height)
+
+# Calculate within-cluster diversity
+cluster_stats <- lapply(unique(clone_groups), function(clust) {
+  members <- which(clone_groups == clust)
+  if (length(members) > 1) {
+    # Get IBS values within this cluster
+    ibs_within <- ibs_matrix[members, members]
+    ibs_within[lower.tri(ibs_within, diag = TRUE)] <- NA
+    
+    data.frame(
+      cluster = clust,
+      n_members = length(members),
+      mean_ibs = mean(ibs_within, na.rm = TRUE),
+      min_ibs = min(ibs_within, na.rm = TRUE),
+      max_ibs = max(ibs_within, na.rm = TRUE)
+    )
+  }
+}) %>% bind_rows()
+
+# Flag suspicious clusters (low within-cluster IBS)
+suspicious <- cluster_stats %>% filter(min_ibs < 0.90)
+
+if (nrow(suspicious) > 0) {
+  warning("Found ", nrow(suspicious), " clusters with low within-cluster IBS")
+  print(suspicious)
+}
+```
+
+### Handling Multiple Sequencing Batches
+
+If you have technical replicates from different sequencing runs, they might have higher technical variation:
+
+```{r batch-effects, eval=FALSE}
+# Separate replicates by batch
+batch1_reps <- list(
+  OGM024 = c("OGM024_batch1_rep1", "OGM024_batch1_rep2"),
+  OGM066 = c("OGM066_batch1_rep1", "OGM066_batch1_rep2")
+)
+
+batch2_reps <- list(
+  OGM024 = c("OGM024_batch2_rep1", "OGM024_batch2_rep2"),
+  OGM066 = c("OGM066_batch2_rep1", "OGM066_batch2_rep2")
+)
+
+# Run separately
+result_batch1 <- tree_trimmer(hc, batch1_reps)
+result_batch2 <- tree_trimmer(hc, batch2_reps)
+
+# Use the more conservative (higher) threshold
+final_height <- max(result_batch1$height, result_batch2$height)
+```
+
+### Custom Clustering Methods
+
+By default, most users run `hclust()` with `method = "average"` (UPGMA), but you can experiment:
+
+```{r clustering-methods, eval=FALSE}
+# Try different methods
+methods <- c("average", "complete", "ward.D2")
+
+results <- lapply(methods, function(m) {
+  hc <- hclust(dist_matrix, method = m)
+  result <- tree_trimmer(hc, tech_reps, verbose = FALSE)
+  data.frame(
+    method = m,
+    height = result$height,
+    max_raw = result$max_raw_height
+  )
+}) %>% bind_rows()
+
+print(results)
+
+# Use the method that gives most stable results
+```
+
+### Dealing with Uneven Replication
+
+Not all colonies have the same number of technical replicates:
+
+```{r uneven-reps, eval=FALSE}
+tech_reps <- list(
+  OGM024 = c("OGM024.1", "OGM024.2", "OGM024.3"),  # 3 reps
+  OGM066 = c("OGM066.1", "OGM066.2"),              # 2 reps
+  OGM108 = c("OGM108.1", "OGM108.2", "OGM108.3", "OGM108.4")  # 4 reps
+)
+
+# tree_trimmer handles this automatically
+result <- tree_trimmer(hc, tech_reps)
+
+# Check if sample size affects threshold
+result$group_sizes
+result$group_heights
+
+# If the group with most reps has the highest threshold,
+# that's expected (more chances for technical variation)
+```
+
+## Troubleshooting
+
+### Problem: High Variation in Technical Replicates
+
+**Symptom:** Your technical replicates unify at very different heights.
+
+```{r diagnose-variation, eval=FALSE}
+result <- tree_trimmer(hc, tech_reps, verbose = TRUE)
+
+# Check the group_heights
+print(result$group_heights)
+
+# If one group is much higher than others:
+#   OGM024: 0.012
+#   OGM066: 0.014
+#   OGM108: 0.089  # << OUTLIER
+
+# Investigate that group
+outlier_samples <- tech_reps$OGM108
+ibs_matrix[outlier_samples, outlier_samples]
+```
+
+**Possible causes:**
+
+1. **Sample swap:** One "replicate" is actually from a different colony
+2. **Contamination:** Cross-sample contamination during extraction
+3. **Poor quality:** One replicate has very low coverage/quality
+
+**Solution:**
+
+```{r fix-outlier, eval=FALSE}
+# Remove the problematic replicate
+tech_reps$OGM108 <- tech_reps$OGM108[1:3]  # drop the 4th one
+
+# Re-run
+result <- tree_trimmer(hc, tech_reps)
+```
+
+### Problem: Tree Never Cuts
+
+**Symptom:** Even at the root of the tree, replicates don't unify.
+
+```{r never-unified, eval=FALSE}
+result <- tree_trimmer(hc, tech_reps)
+# Warning: Group 'OGM024' never unified across all tree heights
+```
+
+**This means:** Your "technical replicates" are as divergent as unrelated samples.
+
+**Solution:**
+
+```{r verify-labels, eval=FALSE}
+# 1. Verify sample names are correct
+tech_reps$OGM024
+hc$labels[grep("OGM024", hc$labels)]
+
+# 2. Check if these are really technical reps
+ibs_matrix["OGM024.1", "OGM024.2"]  # Should be >0.95
+
+# 3. Check for possible mislabeling in your metadata
+sample_metadata %>% filter(grepl("OGM024", sample))
+```
+
+### Problem: Buffer Choice Uncertainty
+
+**Symptom:** You're not sure what buffer to use.
+
+**Empirical approach:**
+
+```{r buffer-sweep, eval=FALSE}
+buffers <- seq(1.0, 1.3, by = 0.05)
+
+results <- lapply(buffers, function(b) {
+  result <- tree_trimmer(hc, tech_reps, buffer = b, verbose = FALSE)
+  clone_groups <- cutree(hc, h = result$height)
+  
+  data.frame(
+    buffer = b,
+    height = result$height,
+    n_clusters = length(unique(clone_groups)),
+    largest_cluster = max(table(clone_groups))
+  )
+}) %>% bind_rows()
+
+# Plot
+plot(results$buffer, results$n_clusters, type = "b",
+     xlab = "Buffer", ylab = "Number of clonal groups",
+     main = "Effect of Buffer on Clone Detection")
+
+# Look for the "elbow" - where increasing buffer stops
+# drastically changing the number of groups
+```
+
+### Problem: Prefix Method Not Working
+
+**Symptom:** `method = "prefix"` matches zero or wrong samples.
+
+```{r debug-prefix, eval=FALSE}
+# Your attempt:
+result <- tree_trimmer(hc, c("OGM024", "OGM066"), 
+                       method = "prefix", separator = ".")
+# Warning: Prefix 'OGM024' matched zero samples
+
+# Debug:
+# 1. What are the actual labels?
+head(hc$labels, 20)
+
+# If they look like: "OGM024_1", "OGM024_2" (underscore, not period)
+result <- tree_trimmer(hc, c("OGM024", "OGM066"),
+                       method = "prefix", separator = "_")
+
+# If they have extra prefixes: "Sample_OGM024.1"
+# Use list method instead:
+tech_reps <- list(
+  OGM024 = grep("OGM024", hc$labels, value = TRUE),
+  OGM066 = grep("OGM066", hc$labels, value = TRUE)
+)
+result <- tree_trimmer(hc, tech_reps, method = "list")
+```
+
+## Performance Optimization
+
+For very large datasets (>10,000 samples):
+
+```{r large-datasets, eval=FALSE}
+# The bottleneck is cutree() called repeatedly
+# Pre-compute all possible cuts:
+
+system.time({
+  # Standard approach
+  result <- tree_trimmer(hc, tech_reps)
+})
+
+# For VERY large trees, consider:
+# 1. Subsample for calibration
+calibration_samples <- c(
+  unlist(tech_reps),  # All tech reps
+  sample(setdiff(hc$labels, unlist(tech_reps)), 500)  # Plus 500 random
+)
+
+hc_subset <- hclust(as.dist(dist_matrix[calibration_samples, calibration_samples]))
+result <- tree_trimmer(hc_subset, tech_reps)
+
+# Then apply to full tree
+clone_groups_full <- cutree(hc_full, h = result$height)
+```
+
+## Exporting Results
+
+### For Publications
+
+```{r export-table, eval=FALSE}
+# Create supplementary table
+clone_table <- data.frame(
+  Sample = rownames(ibs_matrix),
+  Clonal_Group = clone_groups,
+  Is_Technical_Rep = rownames(ibs_matrix) %in% unlist(tech_reps),
+  Retained = rownames(ibs_matrix) %in% unique_genets$sample
+)
+
+write.csv(clone_table, "Supplementary_Table_Clones.csv", row.names = FALSE)
+```
+
+### For Reproducibility
+
+```{r save-results, eval=FALSE}
+# Save the full result object
+saveRDS(result, "clone_detection_result.rds")
+
+# Save session info
+writeLines(capture.output(sessionInfo()), "sessionInfo.txt")
+
+# Save the exact code
+writeLines(c(
+  "# Clone detection parameters",
+  paste("Buffer:", result$buffer),
+  paste("Method:", "prefix"),
+  paste("Separator:", "."),
+  paste("Cut height:", result$height),
+  "",
+  "# Technical replicates used:",
+  paste(names(tech_reps), ":", sapply(tech_reps, length), "replicates")
+), "clone_detection_parameters.txt")
+```
+
+## Integration with Other Tools
+
+### With pcangsd
+
+```{r pcangsd-integration, eval=FALSE}
+# After clone removal, re-run PCA
+library(treeTrimmer)
+
+# Clone detection
+result <- tree_trimmer(hc, tech_reps)
+clone_groups <- cutree(hc, h = result$height)
+
+# Get clone-free samples
+unique_genets <- metadata %>%
+  group_by(cluster = clone_groups) %>%
+  slice(1)
+
+# Write BAM list for pcangsd
+writeLines(unique_genets$bam, "samples_noclones.bams")
+```
+
+```{bash pcangsd-run, eval=FALSE}
+# Run pcangsd with clone-free dataset
+pcangsd -b genotypes_noclones.beagle.gz \
+        -o pca_noclones \
+        -t 8
+```
+
+### With NGSadmix
+
+Similar workflow - just use the clone-free BAM list.
+
+## When NOT to Use This Package
+
+`treeTrimmer` is designed for a specific use case. Don't use it if:
+
+1. **You don't have technical replicates** - The calibration requires known clones
+2. **Your replicates aren't true clones** - If they're full siblings or parent-offspring pairs, this approach fails
+3. **You have very few replicates** - Ideally, have at least 3 replicate groups with 2-3 members each
+4. **Your data is phased haplotypes** - Use identity-by-descent (IBD) methods instead
+
+## Getting Help
+
+If you encounter issues:
+
+1. Check the [GitHub issues page](https://github.com/YOUR_USERNAME/treeTrimmer/issues)
+2. Provide a reproducible example with `reprex::reprex()`
+3. Include your `sessionInfo()` output
+4. Describe what you expected vs. what you got
+
+```{r get-help, eval=FALSE}
+# Minimal reproducible example template
+library(treeTrimmer)
+
+# Simulate data
+set.seed(123)
+dist_mat <- dist(matrix(rnorm(100), nrow = 20))
+hc <- hclust(dist_mat, method = "average")
+
+# Your problem here
+tech_reps <- list(...)
+result <- tree_trimmer(hc, tech_reps)
+# Error: ...
+
+sessionInfo()
+```
