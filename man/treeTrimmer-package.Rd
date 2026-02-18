@@ -38,7 +38,7 @@ Useful links:
 
 }
 \author{
-\strong{Maintainer}: R.J. Eckert \email{ryan.j.eckert@gmail.com}
+\strong{Maintainer}: Ryan J. Eckert \email{ryan.j.eckert@gmail.com}
 
 }
 \keyword{internal}
