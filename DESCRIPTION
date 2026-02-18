@@ -2,8 +2,7 @@ Package: treeTrimmer
 Type: Package
 Title: Calibrate Hierarchical Clustering Thresholds Using Technical Replicates
 Version: 1.0.0
-Authors@R: c(
-    person("R. J.", "Eckert", email = "ryan.j.eckert@gmail.com", role = c("aut", "cre"))
+Authors@R: person("R. J.", "Eckert", email = "ryan.j.eckert@gmail.com", role = c("aut", "cre"))
 Description: Provides tools to calibrate tree cut heights for clone detection in
     hierarchical clustering analyses. Uses known technical replicates to determine
     the minimum genetic distance threshold at which true clones cluster together.
